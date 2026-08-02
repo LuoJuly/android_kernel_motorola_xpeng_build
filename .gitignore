@@ -1,0 +1,22 @@
+# Build outputs
+/out/target/
+*.log
+*.o
+*.a
+*.lto.o
+
+# WLAN trees are cloned by setup.sh (nested git repos + build dirs)
+/vendor/
+
+# Local toolchains / Lineage symlinks (fetched by setup.sh)
+/prebuilts/clang/
+/prebuilts/gcc/
+/prebuilts/build-tools
+/prebuilts/misc
+
+# Kernel tree is a separate repo (symlink created by setup.sh)
+/kernel/msm-5.4
+
+# Local helpers
+/bin/python
+/header
