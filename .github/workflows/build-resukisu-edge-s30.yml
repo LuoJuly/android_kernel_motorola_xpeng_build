@@ -1,0 +1,106 @@
+name: xpeng ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)
+
+on:
+  schedule:
+    # Every Sunday 00:00 UTC (~ weekly)
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+    inputs:
+      update_resukisu:
+        description: "Update ReSukiSU submodule to latest main"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-resukisu-edge-s30
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Release (Edge S30)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /usr/share/swift || true
+          sudo apt-get clean
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bison flex bc libssl-dev libelf-dev cpio \
+            python3 curl ca-certificates git rsync xz-utils zip
+
+      - name: Checkout build scripts
+        uses: actions/checkout@v4
+        with:
+          ref: S3RXC32.33-8-29-ReSukiSU
+          fetch-depth: 0
+
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: .ci-toolchain
+          key: toolchain-clang-r383902b1-gcc49-magisk-v1
+          restore-keys: |
+            toolchain-clang-r383902b1-gcc49-
+
+      - name: Build kernel, boot.img and AnyKernel3
+        id: build
+        env:
+          VARIANT: edge-s30
+          ENABLE_NFC: "false"
+          UPDATE_RESUKISU: ${{ github.event_name == 'schedule' || inputs.update_resukisu }}
+          KERNEL_URL: https://github.com/LuoJuly/android_kernel_motorola_xpeng.git
+          KERNEL_BRANCH: android-12-release-S3RXC32.33-8-29
+          CLANG_GIT_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
+          GCC_GIT_URL: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+        run: |
+          chmod +x scripts/ci/build_resukisu_boot.sh scripts/ci/pack_anykernel3.sh
+          chmod +x scripts/ci/host-bin/* || true
+          scripts/ci/build_resukisu_boot.sh
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xpeng-EdgeS30-resukisu-${{ env.RELEASE_TAG }}
+          path: |
+            .ci-work/edge-s30/release/boot_ksu.img
+            .ci-work/edge-s30/release/boot.img
+            .ci-work/edge-s30/release/kernel
+            .ci-work/edge-s30/release/Image
+            .ci-work/edge-s30/release/AnyKernel3*.zip
+            .ci-work/edge-s30/release/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          body_path: .ci-work/edge-s30/release/RELEASE_NOTES.md
+          files: |
+            .ci-work/edge-s30/release/boot_ksu.img
+            .ci-work/edge-s30/release/kernel
+            .ci-work/edge-s30/release/AnyKernel3-*.zip
+          draft: false
+          prerelease: false
+          make_latest: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,5 +1,8 @@
 # Build outputs
-/out/target/
+/out/
+/.ci-work/
+/.ci-src/
+/.ci-toolchain/
 *.log
 *.o
 *.a
@@ -14,8 +17,13 @@
 /prebuilts/build-tools
 /prebuilts/misc
 
-# Kernel tree is a separate repo (symlink created by setup.sh)
+# Kernel tree is a separate repo (symlink/clone; never upload sources)
 /kernel/msm-5.4
+/kernel/msm-5.4/
+
+# Large OEM boot (uploaded separately as Release asset assets-S3RXC32.33-8-29)
+/prebuilt/boot_oem.img
+/prebuilt/*.img
 
 # Local helpers
 /bin/python
