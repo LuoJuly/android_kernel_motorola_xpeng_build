@@ -415,7 +415,6 @@ build_kernel() {
     grep -E 'CONFIG_NFC_QTI_I2C' "${OUT_DIR}/.config" || true
   fi
   cp -f "${image}" "${WORK_DIR}/release/Image"
-  cp -f "${image}" "${WORK_DIR}/release/kernel"
 
   restore_nfc_config
   git -C "${KERNEL_DIR}" checkout HEAD -- \
@@ -528,7 +527,6 @@ repack_boot() {
 
   cp -f new-boot.img "${WORK_DIR}/release/boot_ksu.img"
   cp -f new-boot.img "${WORK_DIR}/release/boot.img"
-  cp -f "${WORK_DIR}/release/Image" "${WORK_DIR}/release/kernel"
 
   local out_name="boot_ksu-${VARIANT_SLUG}-ReSukiSU-${safe_ver}-${ROM_ID}.img"
   cp -f new-boot.img "${WORK_DIR}/release/${out_name}"
@@ -621,7 +619,7 @@ Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel fla
 
 ## Assets
 - \`boot_ksu.img\` — OEM boot.img with replaced ReSukiSU kernel
-- \`kernel\` — raw ARM64 Image
+- \`Image\` — raw ARM64 kernel Image
 - \`AnyKernel3-*.zip\` — flashable zip for recovery / Kernel Flasher
 
 > Built automatically from \`kernel_motorola_xpeng_build\` (\`S3RXC32.33-8-29-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng](https://github.com/LuoJuly/android_kernel_motorola_xpeng) with the latest ReSukiSU submodule and latest AnyKernel3 upstream.
@@ -645,7 +643,6 @@ main() {
     if [[ ! -f "${WORK_DIR}/release/Image" ]]; then
       cp -f "${OUT_DIR}/arch/arm64/boot/Image" "${WORK_DIR}/release/Image"
     fi
-    cp -f "${WORK_DIR}/release/Image" "${WORK_DIR}/release/kernel"
     info "Skipping kernel build; using existing Image"
   fi
   ensure_boot_oem

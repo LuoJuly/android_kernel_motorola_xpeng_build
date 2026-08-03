@@ -84,7 +84,6 @@ jobs:
           path: |
             .ci-work/g200/release/boot_ksu.img
             .ci-work/g200/release/boot.img
-            .ci-work/g200/release/kernel
             .ci-work/g200/release/Image
             .ci-work/g200/release/AnyKernel3*.zip
             .ci-work/g200/release/RELEASE_NOTES.md
@@ -99,7 +98,7 @@ jobs:
           body_path: .ci-work/g200/release/RELEASE_NOTES.md
           files: |
             .ci-work/g200/release/boot_ksu.img
-            .ci-work/g200/release/kernel
+            .ci-work/g200/release/Image
             .ci-work/g200/release/AnyKernel3-*.zip
           draft: false
           prerelease: false

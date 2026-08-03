@@ -37,7 +37,7 @@ Each run:
 3. Builds kernel (NFC per variant)
 4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
 5. Packs AnyKernel3 from latest upstream
-6. Publishes Release assets: `boot_ksu.img`, `kernel`, `AnyKernel3-*.zip`
+6. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`
 
 OEM boot base image is stored as Release asset tag `assets-S3RXC32.33-8-29` (not in git) to keep pushes small.
 

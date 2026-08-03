@@ -84,7 +84,6 @@ jobs:
           path: |
             .ci-work/edge-s30/release/boot_ksu.img
             .ci-work/edge-s30/release/boot.img
-            .ci-work/edge-s30/release/kernel
             .ci-work/edge-s30/release/Image
             .ci-work/edge-s30/release/AnyKernel3*.zip
             .ci-work/edge-s30/release/RELEASE_NOTES.md
@@ -99,7 +98,7 @@ jobs:
           body_path: .ci-work/edge-s30/release/RELEASE_NOTES.md
           files: |
             .ci-work/edge-s30/release/boot_ksu.img
-            .ci-work/edge-s30/release/kernel
+            .ci-work/edge-s30/release/Image
             .ci-work/edge-s30/release/AnyKernel3-*.zip
           draft: false
           prerelease: false
