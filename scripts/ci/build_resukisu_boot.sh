@@ -32,7 +32,8 @@ JOBS="${JOBS:-$(nproc)}"
 BOOT_OEM_IMG="${BOOT_OEM_IMG:-${BUILD_ROOT}/prebuilt/boot_oem.img}"
 # Large OEM boot is kept as a Release asset (not in git) to avoid flaky huge pushes.
 BOOT_OEM_RELEASE_REPO="${BOOT_OEM_RELEASE_REPO:-LuoJuly/kernel_motorola_xpeng_build}"
-BOOT_OEM_RELEASE_TAG="${BOOT_OEM_RELEASE_TAG:-assets-S3RXC32.33-8-29}"
+# Tag prefix z- keeps this utility release at the bottom of the Releases list.
+BOOT_OEM_RELEASE_TAG="${BOOT_OEM_RELEASE_TAG:-z-assets-S3RXC32.33-8-29}"
 BOOT_OEM_ASSET_NAME="${BOOT_OEM_ASSET_NAME:-boot_oem.img}"
 
 KERNEL_URL="${KERNEL_URL:-https://github.com/LuoJuly/android_kernel_motorola_xpeng.git}"

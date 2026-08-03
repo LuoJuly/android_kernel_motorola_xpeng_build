@@ -17,7 +17,7 @@ git clone --recursive https://github.com/LuoJuly/android_kernel_motorola_xpeng
 | `build-wlan.sh` | Build `wlan.ko` for qca6490 / qca6750 / qca6390 |
 | `build-all.sh` | Kernel + WLAN + install stripped kos |
 | `setup.sh` | Fetch/link kernel, clang, gcc, Lineage host tools, WLAN trees |
-| `prebuilt/boot_oem.img` | Stock boot (gitignored; downloaded from Release `assets-S3RXC32.33-8-29`) |
+| `prebuilt/boot_oem.img` | Stock boot (gitignored; downloaded from Release `z-assets-S3RXC32.33-8-29`) |
 | `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → build → repack boot → AnyKernel3 |
 | `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip |
 | `scripts/ci/run_local_both.sh` | Local helper: Edge S30 (NFC off) + G200 (NFC on) |
@@ -39,7 +39,7 @@ Each run:
 5. Packs AnyKernel3 from latest upstream
 6. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`
 
-OEM boot base image is stored as Release asset tag `assets-S3RXC32.33-8-29` (not in git) to keep pushes small.
+OEM boot base image is stored as Release asset tag `z-assets-S3RXC32.33-8-29` (not in git) to keep pushes small and stay at the bottom of the Releases list.
 
 Release notes include ReSukiSU Value, e.g. `v4.1.0-1332-g59c99fdf@ReSukiSU (35046/2)`.
 
