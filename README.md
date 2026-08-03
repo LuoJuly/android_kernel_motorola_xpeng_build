@@ -35,7 +35,7 @@ Each run:
 1. Clones `android_kernel_motorola_xpeng` (`--recursive`)
 2. Updates ReSukiSU submodule to latest `main`
 3. Builds kernel (NFC per variant)
-4. Fetches `boot_oem.img` (local / `~/下载` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
+4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
 5. Packs AnyKernel3 from latest upstream
 6. Publishes Release assets: `boot_ksu.img`, `kernel`, `AnyKernel3-*.zip`
 
