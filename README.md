@@ -79,8 +79,20 @@ Outputs:
 - `out/target/product/generic/obj/kernel/msm-5.4/arch/arm64/boot/Image`
 - `out/wlan-modules/wlan-*.ko`
 
-## Notes
+## HOW TO USE
 
-- On xpeng, `fastboot flash boot` may hit **Preflash validation failed**; flash `boot` via TWRP/`dd` instead.
-- Disable AVB as needed with a flags-cleared `vbmeta` image.
-- Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU`
+```
+# Press the volume down and power buttons to enter FASTBOOT mode, then enter the command to enter Fastboot mode.
+# 按音量下和开机键进入 FASTBOOT 模式，输入命令，进入 Fastbootd
+fastboot reboot fastboot
+
+# Flash boot_ksu.img
+# 刷写 boot_ksu.img
+fastboot flash boot boot_ksu.img
+
+# If the device fails to boot after flashing, you will need to format the Data.
+# 如果刷写后无法开机，则需要格式化 Data
+fastboot -w
+```
+
+Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU`
