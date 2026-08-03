@@ -55,9 +55,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ci-toolchain
-          key: toolchain-clang-r383902b1-gcc49-magisk-v1
+          key: toolchain-clang-r383902b1-lineage-gcc49-magisk-v2
           restore-keys: |
-            toolchain-clang-r383902b1-gcc49-
+            toolchain-clang-r383902b1-lineage-gcc49-
 
       - name: Build kernel, boot.img and AnyKernel3
         id: build
@@ -68,7 +68,10 @@ jobs:
           KERNEL_URL: https://github.com/LuoJuly/android_kernel_motorola_xpeng.git
           KERNEL_BRANCH: android-12-release-S3RXC32.33-8-29
           CLANG_GIT_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
-          GCC_GIT_URL: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          GCC_GIT_URL: https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git
+          GCC_GIT_BRANCH: lineage-19.1
+          GCC_GIT_FALLBACK: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
+          GCC_GIT_FALLBACK_BRANCH: master-kernel-build-2021
         run: |
           chmod +x scripts/ci/build_resukisu_boot.sh scripts/ci/pack_anykernel3.sh
           chmod +x scripts/ci/host-bin/* || true

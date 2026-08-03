@@ -21,8 +21,11 @@ TARGET_BUILD_VARIANT="${TARGET_BUILD_VARIANT:-user}"
 CLANG_VERSION="${CLANG_VERSION:-clang-r383902b1}"
 CLANG_GIT_URL="${CLANG_GIT_URL:-https://mirrors.bfsu.edu.cn/git/AOSP/platform/prebuilts/clang/host/linux-x86}"
 CLANG_GIT_FALLBACK="${CLANG_GIT_FALLBACK:-https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86}"
-GCC_GIT_URL="${GCC_GIT_URL:-https://mirrors.bfsu.edu.cn/git/AOSP/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9}"
+# AOSP main tip is empty; use Lineage mirror (same as local xpeng-build/setup.sh).
+GCC_GIT_URL="${GCC_GIT_URL:-https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git}"
+GCC_GIT_BRANCH="${GCC_GIT_BRANCH:-lineage-19.1}"
 GCC_GIT_FALLBACK="${GCC_GIT_FALLBACK:-https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9}"
+GCC_GIT_FALLBACK_BRANCH="${GCC_GIT_FALLBACK_BRANCH:-master-kernel-build-2021}"
 TOOLCHAIN_DIR="${TOOLCHAIN_DIR:-${BUILD_ROOT}/.ci-toolchain}"
 XPENG_BUILD_ROOT="${XPENG_BUILD_ROOT:-${BUILD_ROOT}}"
 JOBS="${JOBS:-$(nproc)}"
@@ -225,9 +228,16 @@ setup_toolchain() {
     local gcc_dir="${TOOLCHAIN_DIR}/gcc/linux-x86/aarch64/aarch64-linux-android-4.9"
     if [[ ! -x "${gcc_dir}/bin/aarch64-linux-android-gcc" ]]; then
       mkdir -p "$(dirname "${gcc_dir}")"
+      # Drop empty/broken clones (AOSP main tip has no binaries).
+      if [[ -d "${gcc_dir}" && ! -x "${gcc_dir}/bin/aarch64-linux-android-gcc" ]]; then
+        info "Removing incomplete gcc tree at ${gcc_dir}"
+        rm -rf "${gcc_dir}"
+      fi
       if [[ ! -d "${gcc_dir}/.git" ]]; then
-        git clone --depth=1 "${GCC_GIT_URL}" "${gcc_dir}" \
-          || git clone --depth=1 "${GCC_GIT_FALLBACK}" "${gcc_dir}"
+        info "Cloning gcc 4.9 from ${GCC_GIT_URL} (${GCC_GIT_BRANCH})"
+        git clone --depth=1 --branch "${GCC_GIT_BRANCH}" "${GCC_GIT_URL}" "${gcc_dir}" \
+          || git clone --depth=1 --branch "${GCC_GIT_FALLBACK_BRANCH}" \
+               "${GCC_GIT_FALLBACK}" "${gcc_dir}"
       fi
     fi
     [[ -x "${gcc_dir}/bin/aarch64-linux-android-gcc" ]] || die "gcc 4.9 not found after clone"
