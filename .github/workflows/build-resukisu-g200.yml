@@ -2,8 +2,8 @@ name: xpeng 5.4.302 ReSukiSU Boot/Kernel for Moto G200 5G (XT2175-1)
 
 on:
   schedule:
-    # Every Sunday 02:00 UTC (~ weekly, after Edge S30 job)
-    - cron: "0 2 * * 0"
+    # First day of month 02:00 UTC (~ monthly, after Edge S30 job)
+    - cron: "0 2 1 * *"
   workflow_dispatch:
     inputs:
       update_resukisu:

@@ -1,6 +1,6 @@
 # android_kernel_motorola_xpeng_build
 
-Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, plus weekly **ReSukiSU** boot / AnyKernel3 / WiFi KSU GitHub Actions.
+Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, plus monthly **ReSukiSU** boot / AnyKernel3 / WiFi KSU GitHub Actions.
 
 ## Active CI branch: `5.4.302-s3rxc32.33-8-25-ReSukiSU`
 
@@ -24,7 +24,7 @@ Kernel sources are **not** in this repo. They are fetched by git.
 | `scripts/ci/pack_wlan_ksu_module.sh` | Pack Magisk/KernelSU WiFi zip |
 | `scripts/ci/pack_anykernel3.sh` | Pack AnyKernel3 (**Image + bundled WiFi KSU zip**) |
 | `scripts/ci/wlan-ksu-module-template/` | Magisk module scripts (`service.sh` late-insmod) |
-| `.github/workflows/` | Weekly Actions for Edge S30 + G200 |
+| `.github/workflows/` | Monthly Actions for Edge S30 + G200 |
 
 ## Pipeline (each variant)
 
@@ -36,12 +36,12 @@ Kernel sources are **not** in this repo. They are fetched by git.
 6. Pack `AnyKernel3-*-5.4.302-*.zip` containing **kernel + WiFi KSU zip**
 7. Publish Release assets
 
-## ReSukiSU weekly CI
+## ReSukiSU monthly CI
 
 | Workflow | Device | NFC | Schedule (UTC) |
 |----------|--------|-----|----------------|
-| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off | Sun 00:00 |
-| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on | Sun 02:00 |
+| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off | 1st of month 00:00 |
+| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on | 1st of month 02:00 |
 
 ### Local build
 

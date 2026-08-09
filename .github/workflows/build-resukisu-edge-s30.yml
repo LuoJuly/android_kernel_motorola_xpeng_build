@@ -2,8 +2,8 @@ name: xpeng 5.4.302 ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)
 
 on:
   schedule:
-    # Every Sunday 00:00 UTC (~ weekly)
-    - cron: "0 0 * * 0"
+    # First day of month 00:00 UTC (~ monthly)
+    - cron: "0 0 1 * *"
   workflow_dispatch:
     inputs:
       update_resukisu:
