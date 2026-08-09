@@ -1,56 +1,54 @@
-# kernel_motorola_xpeng_build
+# android_kernel_motorola_xpeng_build
 
-Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, based on **MMI-S3RXC32.33-8-29**, plus weekly **ReSukiSU** boot / AnyKernel3 GitHub Actions.
+Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, plus weekly **ReSukiSU** boot / AnyKernel3 / WiFi KSU GitHub Actions.
 
-Kernel sources are **not** in this repo. They are fetched by git:
+## Active CI branch: `5.4.302-s3rxc32.33-8-25-ReSukiSU`
 
-```bash
-git clone --recursive https://github.com/LuoJuly/android_kernel_motorola_xpeng
-# default branch: android-12-release-S3RXC32.33-8-29
-```
+| Item | Value |
+|------|-------|
+| Kernel source | [`android_kernel_motorola_xpeng` @ `5.4.302-s3rxc32.33-8-25`](https://github.com/LuoJuly/android_kernel_motorola_xpeng/tree/5.4.302-s3rxc32.33-8-25) |
+| Kernel version label | **5.4.302** |
+| ROM id | `S3RXC32.33-8-25` |
+| Legacy scripts branch | `S3RXC32.33-8-29-ReSukiSU` (8-29 kernel, no live WiFi pack) |
+
+Kernel sources are **not** in this repo. They are fetched by git.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `build-kernel.sh` | Build `Image` / modules (local MMI tree) |
-| `build-wlan.sh` | Build `wlan.ko` for qca6490 / qca6750 / qca6390 |
-| `build-all.sh` | Kernel + WLAN + install stripped kos |
+| `build-kernel.sh` / `build-wlan.sh` / `build-all.sh` | Local MMI-style builds |
 | `setup.sh` | Fetch/link kernel, clang, gcc, Lineage host tools, WLAN trees |
-| `prebuilt/boot_oem.img` | Stock boot (gitignored; downloaded from Release `z-assets-S3RXC32.33-8-29`) |
-| `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → build → repack boot → AnyKernel3 |
-| `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip |
-| `scripts/ci/run_local_both.sh` | Local helper: Edge S30 (NFC off) + G200 (NFC on) |
-| `.github/workflows/` | Weekly Actions (Sunday UTC) for both devices |
+| `scripts/ci/build_resukisu_boot.sh` | Clone kernel → ReSukiSU → Image → **WiFi kos** → KSU zip → boot → AnyKernel3 |
+| `scripts/ci/build_wlan_modules.sh` | Build vermagic-matched `qca_cld3_*.ko` against current `O=` |
+| `scripts/ci/pack_wlan_ksu_module.sh` | Pack Magisk/KernelSU WiFi zip |
+| `scripts/ci/pack_anykernel3.sh` | Pack AnyKernel3 (**Image + bundled WiFi KSU zip**) |
+| `scripts/ci/wlan-ksu-module-template/` | Magisk module scripts (`service.sh` late-insmod) |
+| `.github/workflows/` | Weekly Actions for Edge S30 + G200 |
 
-## ReSukiSU weekly CI (two scripts / workflows)
+## Pipeline (each variant)
+
+1. Clone/update kernel `5.4.302-s3rxc32.33-8-25` (+ ReSukiSU submodule)
+2. Build `Image` (NFC off for Edge S30, on for G200)
+3. Build WiFi modules against that Image (`qca_cld3_{wlan,qca6750,qca6390}.ko`)
+4. Pack standalone `wlan_crc_match_5.4.302-ksu-g*.zip`
+5. Repack `boot_ksu.img`
+6. Pack `AnyKernel3-*-5.4.302-*.zip` containing **kernel + WiFi KSU zip**
+7. Publish Release assets
+
+## ReSukiSU weekly CI
 
 | Workflow | Device | NFC | Schedule (UTC) |
 |----------|--------|-----|----------------|
-| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off (default) | Sun 00:00 |
-| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on (`CONFIG_NFC_QTI_I2C=m`) | Sun 02:00 |
+| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off | Sun 00:00 |
+| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on | Sun 02:00 |
 
-Each run:
-
-1. Clones `android_kernel_motorola_xpeng` (`--recursive`)
-2. Updates ReSukiSU submodule to latest `main`
-3. Builds kernel (NFC per variant)
-4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
-5. Packs AnyKernel3 from latest upstream
-6. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`
-
-OEM boot base image is stored as Release asset tag `z-assets-S3RXC32.33-8-29` (not in git) to keep pushes small and stay at the bottom of the Releases list.
-
-Release notes include ReSukiSU Value, e.g. `v4.1.0-1332-g59c99fdf@ReSukiSU (35046/2)`.
-
-### Local ReSukiSU build
+### Local build
 
 ```bash
-# optional: use existing toolchains / kernel symlink from setup.sh
 export XPENG_BUILD_ROOT=$PWD
-export KERNEL_SRC=~/android/kernel-msm-MMI-S3RXC32.33-8-29   # optional
+export KERNEL_SRC=~/android/mmi-8-25-upstreaming   # optional local tree on 5.4.302 branch
 
-# both variants
 ./scripts/ci/run_local_both.sh
 
 # or one variant
@@ -60,39 +58,19 @@ VARIANT=g200 ./scripts/ci/build_resukisu_boot.sh
 
 Artifacts: `.ci-work/<variant>/release/`
 
-## One-time setup (manual MMI build)
-
-Needs a Lineage (or AOSP) tree that still has:
-
-- `prebuilts/build-tools`
-- `prebuilts/misc` (`dtc`, `ufdt_apply_overlay`)
-- `prebuilts/gcc/.../aarch64-linux-android-4.9`
-
-```bash
-export LINEAGE_ROOT=~/android/lineage
-./setup.sh
-./build-all.sh
-```
-
-Outputs:
-
-- `out/target/product/generic/obj/kernel/msm-5.4/arch/arm64/boot/Image`
-- `out/wlan-modules/wlan-*.ko`
+- `boot_ksu.img` / `Image`
+- `wlan_crc_match_5.4.302-ksu-g*.zip`
+- `AnyKernel3-*-5.4.302-*.zip` (includes `wlan_crc_match_ksu.zip`)
 
 ## HOW TO USE
 
 ```
-# Press the volume down and power buttons to enter FASTBOOT mode, then enter the command to enter Fastboot mode.
-# 按音量下和开机键进入 FASTBOOT 模式，输入命令，进入 Fastbootd
 fastboot reboot fastboot
-
-# Flash boot_ksu.img
-# 刷写 boot_ksu.img
 fastboot flash boot boot_ksu.img
-
-# If the device fails to boot after flashing, you will need to format the Data.
-# 如果刷写后无法开机，则需要格式化 Data
+# If needed:
 fastboot -w
 ```
 
-Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU`
+AnyKernel3: flash in recovery / Kernel Flasher (installs kernel; best-effort installs WiFi module, also copies zip to `/sdcard/Download/`).
+
+Standalone WiFi zip: install via KernelSU Manager after first boot, then reboot.

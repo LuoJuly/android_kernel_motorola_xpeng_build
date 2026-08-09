@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
-# Build xpeng MMI kernel (ReSukiSU), repack boot_oem.img, pack AnyKernel3.
+# Build xpeng MMI kernel (ReSukiSU), WLAN KSU module, repack boot, pack AnyKernel3.
 #
-# This script lives in kernel_motorola_xpeng_build and clones kernel sources
+# This script lives in android_kernel_motorola_xpeng_build and clones kernel sources
 # from github.com/LuoJuly/android_kernel_motorola_xpeng (not vendored here).
 #
 # Variants:
 #   VARIANT=edge-s30  ENABLE_NFC=false  -> Moto Edge S30 (XT2175-2)
 #   VARIANT=g200      ENABLE_NFC=true   -> Moto G200 5G (XT2175-1)
+#
+# Default kernel branch: 5.4.302-s3rxc32.33-8-25 (kernel version label 5.4.302).
+# Pipeline: Image -> WiFi kos (vermagic-matched) -> Magisk/KSU wifi zip ->
+#           boot_ksu.img -> AnyKernel3 (Image + wifi zip bundled).
 set -euo pipefail
 
 BUILD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${BUILD_ROOT}"
 
 VARIANT="${VARIANT:-edge-s30}"
-ENABLE_NFC="${ENABLE_NFC:-false}"
-ROM_ID="${ROM_ID:-S3RXC32.33-8-29}"
+# Allow explicit ENABLE_NFC=true/false; variant only supplies the default.
+ENABLE_NFC_ENV="${ENABLE_NFC-}"
+ROM_ID="${ROM_ID:-S3RXC32.33-8-25}"
+KERNEL_VER_LABEL="${KERNEL_VER_LABEL:-5.4.302}"
 DEVICE="${DEVICE:-xpeng}"
 TARGET_PRODUCT="${TARGET_PRODUCT:-xpeng_retcn}"
 TARGET_BUILD_VARIANT="${TARGET_BUILD_VARIANT:-user}"
@@ -31,13 +37,15 @@ XPENG_BUILD_ROOT="${XPENG_BUILD_ROOT:-${BUILD_ROOT}}"
 JOBS="${JOBS:-$(nproc)}"
 BOOT_OEM_IMG="${BOOT_OEM_IMG:-${BUILD_ROOT}/prebuilt/boot_oem.img}"
 # Large OEM boot is kept as a Release asset (not in git) to avoid flaky huge pushes.
-BOOT_OEM_RELEASE_REPO="${BOOT_OEM_RELEASE_REPO:-LuoJuly/kernel_motorola_xpeng_build}"
+BOOT_OEM_RELEASE_REPO="${BOOT_OEM_RELEASE_REPO:-LuoJuly/android_kernel_motorola_xpeng_build}"
 # Tag prefix z- keeps this utility release at the bottom of the Releases list.
 BOOT_OEM_RELEASE_TAG="${BOOT_OEM_RELEASE_TAG:-z-assets-S3RXC32.33-8-29}"
 BOOT_OEM_ASSET_NAME="${BOOT_OEM_ASSET_NAME:-boot_oem.img}"
+BUILD_WLAN="${BUILD_WLAN:-true}"
+WLAN_TAG="${WLAN_TAG:-MMI-S3RXC32.33-8-29}"
 
 KERNEL_URL="${KERNEL_URL:-https://github.com/LuoJuly/android_kernel_motorola_xpeng.git}"
-KERNEL_BRANCH="${KERNEL_BRANCH:-android-12-release-S3RXC32.33-8-29}"
+KERNEL_BRANCH="${KERNEL_BRANCH:-5.4.302-s3rxc32.33-8-25}"
 KERNEL_DIR="${KERNEL_DIR:-${BUILD_ROOT}/.ci-src/android_kernel_motorola_xpeng}"
 
 case "${VARIANT}" in
@@ -45,15 +53,15 @@ case "${VARIANT}" in
     VARIANT=edge-s30
     VARIANT_SLUG="xpeng-EdgeS30"
     DEVICE_TITLE="Moto Edge S30 (XT2175-2)"
-    RELEASE_TITLE="xpeng ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)"
-    ENABLE_NFC=false
+    RELEASE_TITLE="xpeng ${KERNEL_VER_LABEL} ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)"
+    ENABLE_NFC="${ENABLE_NFC_ENV:-false}"
     ;;
   g200|xt2175-1)
     VARIANT=g200
     VARIANT_SLUG="xpeng-G200"
     DEVICE_TITLE="Moto G200 5G (XT2175-1)"
-    RELEASE_TITLE="xpeng ReSukiSU Boot/Kernel for Moto G200 5G (XT2175-1)"
-    ENABLE_NFC=true
+    RELEASE_TITLE="xpeng ${KERNEL_VER_LABEL} ReSukiSU Boot/Kernel for Moto G200 5G (XT2175-1)"
+    ENABLE_NFC="${ENABLE_NFC_ENV:-true}"
     ;;
   *)
     echo "[!] Unknown VARIANT=${VARIANT} (use edge-s30 or g200)" >&2
@@ -542,14 +550,14 @@ repack_boot() {
   fi
 
   case "${VARIANT}" in
-    edge-s30) RELEASE_TAG="MMI-${ROM_ID}-ReSukiSU-EdgeS30-${build_id}" ;;
-    g200)     RELEASE_TAG="MMI-${ROM_ID}-ReSukiSU-G200-${build_id}" ;;
+    edge-s30) RELEASE_TAG="MMI-${KERNEL_VER_LABEL}-${ROM_ID}-ReSukiSU-EdgeS30-${build_id}" ;;
+    g200)     RELEASE_TAG="MMI-${KERNEL_VER_LABEL}-${ROM_ID}-ReSukiSU-G200-${build_id}" ;;
   esac
 
   RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
   RELEASE_NAME="${RELEASE_TITLE}"
   BOOT_ARTIFACT="${WORK_DIR}/release/boot_ksu.img"
-  export RELEASE_TAG RELEASE_NAME BOOT_ARTIFACT VARIANT_SLUG DEVICE_TITLE
+  export RELEASE_TAG RELEASE_NAME BOOT_ARTIFACT VARIANT_SLUG DEVICE_TITLE KERNEL_VER_LABEL
 
   gh_env RELEASE_TAG "${RELEASE_TAG}"
   gh_env RELEASE_NAME "${RELEASE_NAME}"
@@ -557,6 +565,7 @@ repack_boot() {
   gh_env VARIANT_SLUG "${VARIANT_SLUG}"
   gh_env DEVICE_TITLE "${DEVICE_TITLE}"
   gh_env ROM_ID "${ROM_ID}"
+  gh_env KERNEL_VER_LABEL "${KERNEL_VER_LABEL}"
   gh_env WORK_DIR "${WORK_DIR}"
 
   info "Output: ${BOOT_ARTIFACT}"
@@ -564,8 +573,47 @@ repack_boot() {
   endlog
 }
 
+build_wlan_and_pack() {
+  [[ "${BUILD_WLAN}" == "true" ]] || {
+    info "BUILD_WLAN=false; skipping WiFi KSU module"
+    return 0
+  }
+  log "Build WiFi modules (CRC/vermagic-matched) + KSU zip"
+  local wlan_script pack_script
+  wlan_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/build_wlan_modules.sh"
+  pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_wlan_ksu_module.sh"
+  [[ -f "${wlan_script}" ]] || die "missing ${wlan_script}"
+  [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
+
+  BUILD_ROOT="${BUILD_ROOT}" WORK_DIR="${WORK_DIR}" OUT_DIR="${OUT_DIR}" \
+    WLAN_TAG="${WLAN_TAG}" JOBS="${JOBS}" \
+    CLANG="${CLANG}" MAKE="${MAKE}" AARCH64_PREFIX="${AARCH64_PREFIX}" \
+    LD_LLD="${LD_LLD}" LLVM_AR="${LLVM_AR}" LLVM_NM="${LLVM_NM}" \
+    DTC_EXT="${DTC_EXT}" UFDT_EXT="${UFDT_EXT}" \
+    bash "${wlan_script}"
+
+  WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}"
+  if [[ -f "${WORK_DIR}/wlan_out_dir.txt" ]]; then
+    WLAN_OUT_DIR="$(cat "${WORK_DIR}/wlan_out_dir.txt")"
+  fi
+
+  BUILD_ROOT="${BUILD_ROOT}" WORK_DIR="${WORK_DIR}" \
+    WLAN_OUT_DIR="${WLAN_OUT_DIR}" \
+    KERNEL_VER_LABEL="${KERNEL_VER_LABEL}" \
+    KERNEL_DIR="${KERNEL_DIR}" KERNEL_SRC="${KERNEL_DIR}" \
+    bash "${pack_script}"
+
+  export WLAN_OUT_DIR
+  if [[ -f "${WORK_DIR}/wlan_ksu_zip.txt" ]]; then
+    WLAN_KSU_ZIP="$(cat "${WORK_DIR}/wlan_ksu_zip.txt")"
+    export WLAN_KSU_ZIP
+    gh_env WLAN_KSU_ZIP "${WLAN_KSU_ZIP}"
+  fi
+  endlog
+}
+
 pack_anykernel3() {
-  log "Pack AnyKernel3 zip"
+  log "Pack AnyKernel3 zip (kernel + WiFi KSU module)"
   local pack_script
   pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_anykernel3.sh"
   [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
@@ -575,6 +623,9 @@ pack_anykernel3() {
     RESUKISU_VERSION="${RESUKISU_VERSION:-}" \
     RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-}" \
     ROM_ID="${ROM_ID}" \
+    KERNEL_VER_LABEL="${KERNEL_VER_LABEL}" \
+    WLAN_KSU_ZIP="${WLAN_KSU_ZIP:-}" \
+    WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}" \
     GITHUB_PROXY="${GITHUB_PROXY:-}" \
     KERNEL_IMAGE="${WORK_DIR}/release/Image" \
     bash "${pack_script}"
@@ -611,19 +662,22 @@ Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel fla
 
 ## Notes
 - Device: ${DEVICE_TITLE}
+- Kernel: **${KERNEL_VER_LABEL}**
 - MYUI: 4.0
 - Android 12
 - ROM: ${ROM_ID}
 - ReSukiSU: ${RESUKISU_DISPLAY}
 - NFC: ${nfc_note}
+- WiFi: CRC/vermagic-matched \`qca_cld3_*.ko\` (built with this Image)
 - AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\`
 
 ## Assets
 - \`boot_ksu.img\` — OEM boot.img with replaced ReSukiSU kernel
 - \`Image\` — raw ARM64 kernel Image
-- \`AnyKernel3-*.zip\` — flashable zip for recovery / Kernel Flasher
+- \`wlan_crc_match_*-ksu-*.zip\` — KernelSU/Magisk WiFi module (install after boot / also bundled in AK3)
+- \`AnyKernel3-*.zip\` — flashable zip (kernel + bundled WiFi KSU module)
 
-> Built automatically from \`kernel_motorola_xpeng_build\` (\`S3RXC32.33-8-29-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng](https://github.com/LuoJuly/android_kernel_motorola_xpeng) with the latest ReSukiSU submodule and latest AnyKernel3 upstream.
+> Built automatically from \`android_kernel_motorola_xpeng_build\` (\`5.4.302-s3rxc32.33-8-25-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng @ 5.4.302-s3rxc32.33-8-25](https://github.com/LuoJuly/android_kernel_motorola_xpeng/tree/5.4.302-s3rxc32.33-8-25) with ReSukiSU + live-built WiFi kos + latest AnyKernel3 upstream.
 EOF
   gh_env RELEASE_NOTES "${WORK_DIR}/release/RELEASE_NOTES.md"
   info "Release notes written"
@@ -631,6 +685,7 @@ EOF
 
 main() {
   info "Variant=${VARIANT} Device=${DEVICE_TITLE} NFC=${ENABLE_NFC}"
+  info "Kernel branch=${KERNEL_BRANCH} label=${KERNEL_VER_LABEL} ROM_ID=${ROM_ID}"
   info "BUILD_ROOT=${BUILD_ROOT}"
   fetch_kernel
   update_resukisu
@@ -646,6 +701,8 @@ main() {
     fi
     info "Skipping kernel build; using existing Image"
   fi
+  # WiFi kos must track this Image's Module.symvers / vermagic
+  build_wlan_and_pack
   ensure_boot_oem
   setup_magiskboot
   repack_boot

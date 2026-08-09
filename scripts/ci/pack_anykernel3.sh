@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pack compiled kernel Image into latest upstream AnyKernel3 zip (osm0sis/AnyKernel3)
+# Pack compiled kernel Image (+ optional WiFi KSU Magisk module) into AnyKernel3 zip.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,9 +7,12 @@ BUILD_ROOT="${BUILD_ROOT:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
 WORK_DIR="${WORK_DIR:-${BUILD_ROOT}/.ci-work}"
 DEVICE="${DEVICE:-xpeng}"
 VARIANT_SLUG="${VARIANT_SLUG:-xpeng}"
+KERNEL_VER_LABEL="${KERNEL_VER_LABEL:-5.4.302}"
 AK3_REPO="${AK3_REPO:-https://github.com/osm0sis/AnyKernel3.git}"
 AK3_REF="${AK3_REF:-master}"
 AK3_DIR="${AK3_DIR:-${WORK_DIR}/AnyKernel3}"
+WLAN_KSU_ZIP="${WLAN_KSU_ZIP:-}"
+WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}"
 
 info() { echo "[+] $*"; }
 die() { echo "[!] $*" >&2; exit 1; }
@@ -36,6 +39,26 @@ resolve_image() {
   die "kernel Image not found (set KERNEL_IMAGE or build first)"
 }
 
+resolve_wlan_zip() {
+  if [[ -n "${WLAN_KSU_ZIP}" && -f "${WLAN_KSU_ZIP}" ]]; then
+    echo "${WLAN_KSU_ZIP}"
+    return
+  fi
+  if [[ -f "${WORK_DIR}/wlan_ksu_zip.txt" ]]; then
+    local p
+    p="$(cat "${WORK_DIR}/wlan_ksu_zip.txt")"
+    if [[ -f "${p}" ]]; then
+      echo "${p}"
+      return
+    fi
+  fi
+  if [[ -f "${WORK_DIR}/release/wlan_crc_match_ksu.zip" ]]; then
+    echo "${WORK_DIR}/release/wlan_crc_match_ksu.zip"
+    return
+  fi
+  echo ""
+}
+
 clone_anykernel3() {
   local url="${AK3_REPO}"
   if [[ -n "${GITHUB_PROXY:-}" ]]; then
@@ -57,17 +80,19 @@ clone_anykernel3() {
 
 write_anykernel_sh() {
   local resukisu_ver="${RESUKISU_DISPLAY:-${RESUKISU_VERSION:-unknown}}"
-  local rom_id="${ROM_ID:-S3RXC32.33-8-29}"
+  local rom_id="${ROM_ID:-S3RXC32.33-8-25}"
   local device_title="${DEVICE_TITLE:-${DEVICE}}"
+  local kver="${KERNEL_VER_LABEL}"
+  local has_wlan="${1:-0}"
   cat > "${AK3_DIR}/anykernel.sh" <<EOF
 ### AnyKernel3 Ramdisk Mod Script
 ## osm0sis @ xda-developers
-## Auto-generated for ${device_title} ReSukiSU
+## Auto-generated for ${device_title} ReSukiSU (${kver})
 
 ### AnyKernel setup
 # global properties
 properties() { '
-kernel.string=${device_title} ${resukisu_ver} (${rom_id})
+kernel.string=${device_title} ${kver} ${resukisu_ver} (${rom_id})
 do.devicecheck=1
 do.modules=0
 do.systemless=1
@@ -100,15 +125,64 @@ PATCH_VBMETA_FLAG=auto;
 # import functions/variables and setup patching - see for reference (DO NOT REMOVE)
 . tools/ak3-core.sh;
 
+ui_print " ";
+ui_print "Kernel: ${kver} / ${resukisu_ver}";
+ui_print "Device: ${device_title}";
+
 # boot install: replace kernel only (keep ROM ramdisk) for broad ROM compatibility
 split_boot;
 flash_boot;
+
+EOF
+
+  if [[ "${has_wlan}" == "1" ]]; then
+    cat >> "${AK3_DIR}/anykernel.sh" <<'EOF'
+## bundled WiFi KSU Magisk module (CRC/vermagic-matched qca_cld3_*.ko)
+ui_print " ";
+ui_print "Installing bundled WiFi KSU module...";
+WLAN_ZIP="$AKHOME/wlan_crc_match_ksu.zip";
+if [ -f "$WLAN_ZIP" ]; then
+  # Persist a copy for KernelSU Manager / manual install
+  mkdir -p /sdcard/Download;
+  cp -f "$WLAN_ZIP" /sdcard/Download/wlan_crc_match_ksu.zip;
+  ui_print "- saved /sdcard/Download/wlan_crc_match_ksu.zip";
+
+  # Best-effort install into Magisk/KernelSU modules dir (when writable)
+  MODROOT="";
+  for d in /data/adb/modules /data/adb/ksu/modules; do
+    if [ -d "$(dirname "$d")" ] && mkdir -p "$d" 2>/dev/null; then
+      MODROOT="$d/wlan_crc_match_302";
+      break;
+    fi
+  done
+  if [ -n "$MODROOT" ]; then
+    rm -rf "$MODROOT";
+    mkdir -p "$MODROOT";
+    unzip -o "$WLAN_ZIP" -d "$MODROOT" >/dev/null 2>&1 || true;
+    # Magisk update-binary / META-INF not needed inside modules tree
+    rm -rf "$MODROOT/META-INF" 2>/dev/null || true;
+    chmod 0755 "$MODROOT/service.sh" "$MODROOT/customize.sh" 2>/dev/null || true;
+    touch "$MODROOT/auto_mount" 2>/dev/null || true;
+    ui_print "- installed module -> $MODROOT";
+    ui_print "- reboot required for Wi-Fi overlay + service.sh";
+  else
+    ui_print "- /data not writable here; install wlan_crc_match_ksu.zip via KernelSU after boot";
+  fi
+else
+  ui_print "- WARNING: wlan_crc_match_ksu.zip missing from zip";
+fi
+## end WiFi module install
+EOF
+  fi
+
+  cat >> "${AK3_DIR}/anykernel.sh" <<'EOF'
 ## end boot install
 EOF
 }
 
 pack_zip() {
   local image="$1"
+  local wlan_zip="${2:-}"
   mkdir -p "${WORK_DIR}/release"
 
   rm -rf "${AK3_DIR}/.git" \
@@ -119,12 +193,22 @@ pack_zip() {
 
   cp -f "${image}" "${AK3_DIR}/Image"
 
+  if [[ -n "${wlan_zip}" && -f "${wlan_zip}" ]]; then
+    cp -f "${wlan_zip}" "${AK3_DIR}/wlan_crc_match_ksu.zip"
+    # Also stage kos under modules/ for visibility / optional tools
+    if [[ -d "${WLAN_OUT_DIR}" ]]; then
+      mkdir -p "${AK3_DIR}/modules/system/vendor/lib/modules"
+      cp -f "${WLAN_OUT_DIR}/qca_cld3_"*.ko \
+        "${AK3_DIR}/modules/system/vendor/lib/modules/" 2>/dev/null || true
+    fi
+  fi
+
   RESUKISU_VERSION="${RESUKISU_VERSION:-$(cat "${WORK_DIR}/resukisu_version.txt" 2>/dev/null || echo unknown)}"
   RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-$(cat "${WORK_DIR}/resukisu_display.txt" 2>/dev/null || echo "${RESUKISU_VERSION}@ReSukiSU")}"
-  ROM_ID="${ROM_ID:-$(cat "${WORK_DIR}/rom_id.txt" 2>/dev/null || echo S3RXC32.33-8-29)}"
+  ROM_ID="${ROM_ID:-$(cat "${WORK_DIR}/rom_id.txt" 2>/dev/null || echo S3RXC32.33-8-25)}"
   local safe_ver
   safe_ver="$(echo "${RESUKISU_VERSION}" | tr '/:' '--')"
-  local zip_name="AnyKernel3-${VARIANT_SLUG}-ReSukiSU-${safe_ver}-${ROM_ID}.zip"
+  local zip_name="AnyKernel3-${VARIANT_SLUG}-ReSukiSU-${KERNEL_VER_LABEL}-${safe_ver}-${ROM_ID}.zip"
   local zip_path="${WORK_DIR}/release/${zip_name}"
 
   rm -f "${zip_path}"
@@ -151,9 +235,16 @@ main() {
   command -v zip >/dev/null || die "zip is required (apt install zip)"
   command -v git >/dev/null || die "git is required"
 
-  local image
+  local image wlan_zip has_wlan=0
   image="$(resolve_image)"
   info "Using kernel Image: ${image}"
+  wlan_zip="$(resolve_wlan_zip)"
+  if [[ -n "${wlan_zip}" ]]; then
+    has_wlan=1
+    info "Bundling WiFi KSU zip: ${wlan_zip}"
+  else
+    info "No WiFi KSU zip found; packing kernel-only AnyKernel3"
+  fi
 
   if [[ -z "${RESUKISU_VERSION:-}" && -f "${WORK_DIR}/resukisu_version.txt" ]]; then
     RESUKISU_VERSION="$(cat "${WORK_DIR}/resukisu_version.txt")"
@@ -164,11 +255,11 @@ main() {
   if [[ -z "${ROM_ID:-}" && -f "${WORK_DIR}/rom_id.txt" ]]; then
     ROM_ID="$(cat "${WORK_DIR}/rom_id.txt")"
   fi
-  export RESUKISU_VERSION RESUKISU_DISPLAY ROM_ID
+  export RESUKISU_VERSION RESUKISU_DISPLAY ROM_ID KERNEL_VER_LABEL
 
   clone_anykernel3
-  write_anykernel_sh
-  pack_zip "${image}"
+  write_anykernel_sh "${has_wlan}"
+  pack_zip "${image}" "${wlan_zip}"
   info "AnyKernel3 pack done."
 }
 

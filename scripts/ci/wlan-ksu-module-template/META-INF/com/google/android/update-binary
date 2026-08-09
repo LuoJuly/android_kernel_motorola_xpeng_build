@@ -1,0 +1,52 @@
+#!/sbin/sh
+# Magisk/KernelSU-compatible module installer stub
+umask 022
+OUTFD=$2
+ZIPFILE=$3
+
+ui_print() {
+  echo -n -e "ui_print $1\n" > /proc/self/fd/$OUTFD
+  echo -n -e "ui_print\n" > /proc/self/fd/$OUTFD
+}
+
+require_new_magisk() {
+  ui_print "*******************************"
+  ui_print " Please install Magisk v20.4+ or KernelSU "
+  ui_print "*******************************"
+  exit 1
+}
+
+mount /data 2>/dev/null
+
+# Magisk
+[ -f /data/adb/magisk/util_functions.sh ] && {
+  . /data/adb/magisk/util_functions.sh
+  [ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+  install_module
+  exit 0
+}
+
+# KernelSU / APatch: extract into modules dir using module.prop id
+KSU_DIR=
+[ -d /data/adb/ksu ] && KSU_DIR=/data/adb/ksu
+[ -d /data/adb/modules ] || mkdir -p /data/adb/modules
+
+TMPDIR=/dev/tmp/wlan_crc_match_install
+rm -rf "$TMPDIR"
+mkdir -p "$TMPDIR"
+unzip -o "$ZIPFILE" module.prop -d "$TMPDIR" >&2 || require_new_magisk
+id=$(grep '^id=' "$TMPDIR/module.prop" | cut -d= -f2-)
+[ -n "$id" ] || require_new_magisk
+
+MODDIR=/data/adb/modules/$id
+ui_print "- Installing module $id"
+rm -rf "$MODDIR"
+mkdir -p "$MODDIR"
+unzip -o "$ZIPFILE" -d "$MODDIR" >&2
+# drop recovery META-INF from module tree
+rm -rf "$MODDIR/META-INF"
+# mark for update so Magisk/KSU remounts on next boot
+touch "$MODDIR/update" 2>/dev/null || true
+rm -f "$MODDIR/disable" "$MODDIR/remove" 2>/dev/null || true
+ui_print "- Done. Reboot to load modules."
+exit 0
