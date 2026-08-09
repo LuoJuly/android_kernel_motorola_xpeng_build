@@ -1,9 +1,6 @@
 name: xpeng ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)
 
 on:
-  schedule:
-    # Every Sunday 00:00 UTC (~ weekly)
-    - cron: "0 0 * * 0"
   workflow_dispatch:
     inputs:
       update_resukisu:
@@ -64,7 +61,7 @@ jobs:
         env:
           VARIANT: edge-s30
           ENABLE_NFC: "false"
-          UPDATE_RESUKISU: ${{ github.event_name == 'schedule' || inputs.update_resukisu }}
+          UPDATE_RESUKISU: ${{ inputs.update_resukisu }}
           KERNEL_URL: https://github.com/LuoJuly/android_kernel_motorola_xpeng.git
           KERNEL_BRANCH: android-12-release-S3RXC32.33-8-29
           CLANG_GIT_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86

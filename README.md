@@ -1,6 +1,16 @@
-# kernel_motorola_xpeng_build
+# android_kernel_motorola_xpeng_build
 
-Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, based on **MMI-S3RXC32.33-8-29**, plus weekly **ReSukiSU** boot / AnyKernel3 GitHub Actions.
+Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, based on **MMI-S3RXC32.33-8-29**, plus **ReSukiSU** boot / AnyKernel3 GitHub Actions.
+
+## Branch: `S3RXC32.33-8-29-ReSukiSU`
+
+| Item | Value |
+|------|-------|
+| Kernel version | **5.4.210** |
+| Kernel source branch | `android-12-release-S3RXC32.33-8-29` |
+| CI schedule | **manual only** (`workflow_dispatch`) — weekly cron disabled |
+
+For the **5.4.302** live-WiFi pipeline, use branch [`5.4.302-s3rxc32.33-8-25-ReSukiSU`](https://github.com/LuoJuly/android_kernel_motorola_xpeng_build/tree/5.4.302-s3rxc32.33-8-25-ReSukiSU).
 
 Kernel sources are **not** in this repo. They are fetched by git:
 
@@ -21,19 +31,19 @@ git clone --recursive https://github.com/LuoJuly/android_kernel_motorola_xpeng
 | `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → build → repack boot → AnyKernel3 |
 | `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip |
 | `scripts/ci/run_local_both.sh` | Local helper: Edge S30 (NFC off) + G200 (NFC on) |
-| `.github/workflows/` | Weekly Actions (Sunday UTC) for both devices |
+| `.github/workflows/` | Manual Actions for both devices |
 
-## ReSukiSU weekly CI (two scripts / workflows)
+## ReSukiSU CI (manual)
 
-| Workflow | Device | NFC | Schedule (UTC) |
-|----------|--------|-----|----------------|
-| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off (default) | Sun 00:00 |
-| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on (`CONFIG_NFC_QTI_I2C=m`) | Sun 02:00 |
+| Workflow | Device | NFC | Trigger |
+|----------|--------|-----|---------|
+| `build-resukisu-edge-s30.yml` | Moto Edge S30 (XT2175-2) | off (default) | Actions → Run workflow |
+| `build-resukisu-g200.yml` | Moto G200 5G (XT2175-1) | on (`CONFIG_NFC_QTI_I2C=m`) | Actions → Run workflow |
 
 Each run:
 
 1. Clones `android_kernel_motorola_xpeng` (`--recursive`)
-2. Updates ReSukiSU submodule to latest `main`
+2. Updates ReSukiSU submodule to latest `main` (optional input)
 3. Builds kernel (NFC per variant)
 4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
 5. Packs AnyKernel3 from latest upstream
@@ -95,4 +105,4 @@ fastboot flash boot boot_ksu.img
 fastboot -w
 ```
 
-Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU`
+Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU` (kernel **5.4.210**, manual Actions only)
