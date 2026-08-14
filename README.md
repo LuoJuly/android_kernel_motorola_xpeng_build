@@ -9,7 +9,7 @@ Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, pl
 | Kernel source | [`android_kernel_motorola_xpeng` @ `5.4.302-s3rxc32.33-8-25`](https://github.com/LuoJuly/android_kernel_motorola_xpeng/tree/5.4.302-s3rxc32.33-8-25) |
 | Kernel version label | **5.4.302** |
 | ROM id | `S3RXC32.33-8-25` |
-| Legacy scripts branch | `S3RXC32.33-8-29-ReSukiSU` (8-29 kernel, no live WiFi pack) |
+| Legacy scripts branch | `S3RXC32.33-8-29-ReSukiSU` (8-29 kernel **5.4.210**, live WiFi pack) |
 
 Kernel sources are **not** in this repo. They are fetched by git.
 
