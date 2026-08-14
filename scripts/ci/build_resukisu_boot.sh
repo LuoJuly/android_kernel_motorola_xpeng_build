@@ -9,8 +9,9 @@
 #   VARIANT=g200      ENABLE_NFC=true   -> Moto G200 5G (XT2175-1)
 #
 # Default kernel branch: 5.4.302-s3rxc32.33-8-25 (kernel version label 5.4.302).
-# Pipeline: Image -> WiFi kos (vermagic-matched) -> Magisk/KSU wifi zip ->
-#           boot_ksu.img -> AnyKernel3 (Image + wifi zip bundled).
+# Pipeline: Image -> WiFi kos (vermagic-matched) -> optional Magisk/KSU wifi zip
+#           (fastboot-only fallback) -> boot_ksu.img -> AnyKernel3
+#           (Image + vendor .ko via do.modules=1; no KSU wifi zip inside AK3).
 set -euo pipefail
 
 BUILD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -613,7 +614,7 @@ build_wlan_and_pack() {
 }
 
 pack_anykernel3() {
-  log "Pack AnyKernel3 zip (kernel + WiFi KSU module)"
+  log "Pack AnyKernel3 zip (kernel + vendor WiFi kos)"
   local pack_script
   pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_anykernel3.sh"
   [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
@@ -624,7 +625,6 @@ pack_anykernel3() {
     RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-}" \
     ROM_ID="${ROM_ID}" \
     KERNEL_VER_LABEL="${KERNEL_VER_LABEL}" \
-    WLAN_KSU_ZIP="${WLAN_KSU_ZIP:-}" \
     WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}" \
     GITHUB_PROXY="${GITHUB_PROXY:-}" \
     KERNEL_IMAGE="${WORK_DIR}/release/Image" \
@@ -659,6 +659,7 @@ fastboot -w
 ### AnyKernel3 (any ROM)
 
 Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel flasher app.
+This replaces the kernel **and** vendor WiFi \`qca_cld3_*.ko\` (\`do.modules=1\`). No KernelSU WiFi module install is needed.
 
 ## Notes
 - Device: ${DEVICE_TITLE}
@@ -669,13 +670,13 @@ Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel fla
 - ReSukiSU: ${RESUKISU_DISPLAY}
 - NFC: ${nfc_note}
 - WiFi: CRC/vermagic-matched \`qca_cld3_*.ko\` (built with this Image)
-- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\`
+- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` (\`do.modules=1\`, pushes kos to \`/vendor/lib/modules/\`)
 
 ## Assets
 - \`boot_ksu.img\` — OEM boot.img with replaced ReSukiSU kernel
 - \`Image\` — raw ARM64 kernel Image
-- \`wlan_crc_match_*-ksu-*.zip\` — KernelSU/Magisk WiFi module (install after boot / also bundled in AK3)
-- \`AnyKernel3-*.zip\` — flashable zip (kernel + bundled WiFi KSU module)
+- \`AnyKernel3-*.zip\` — flashable zip (kernel + vendor WiFi kos; no KernelSU WiFi module needed)
+- \`wlan_crc_match_*-ksu-*.zip\` — optional KernelSU/Magisk overlay **only if** you flash \`boot_ksu.img\` via fastboot (does not replace vendor kos)
 
 > Built automatically from \`android_kernel_motorola_xpeng_build\` (\`5.4.302-s3rxc32.33-8-25-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng @ 5.4.302-s3rxc32.33-8-25](https://github.com/LuoJuly/android_kernel_motorola_xpeng/tree/5.4.302-s3rxc32.33-8-25) with ReSukiSU + live-built WiFi kos + latest AnyKernel3 upstream.
 EOF

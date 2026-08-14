@@ -59,7 +59,7 @@ jobs:
           restore-keys: |
             toolchain-clang-r383902b1-lineage-gcc49-
 
-      - name: Build kernel, WiFi KSU module, boot.img and AnyKernel3
+      - name: Build kernel, WiFi kos, boot.img and AnyKernel3 (do.modules=1)
         id: build
         env:
           VARIANT: edge-s30

@@ -61,7 +61,7 @@ name=qcacld CRC-matched WiFi for ${KERNEL_VER_LABEL}
 version=v1.0.${KERNEL_VER_LABEL##*.}-g${safe_sha}
 versionCode=${KERNEL_VER_LABEL##*.}
 author=xpeng-resukisu-ci
-description=Rebuilt qca_cld3_{wlan,qca6750,qca6390}.ko against ${vermagic:-${KERNEL_VER_LABEL}} (MODVERSIONS=y). Flash matching boot_ksu/AnyKernel3 first, then install via KernelSU. Overlay: /vendor/lib/modules/qca_cld3_*.ko
+description=Optional overlay of qca_cld3_{wlan,qca6750,qca6390}.ko (${vermagic:-${KERNEL_VER_LABEL}}, MODVERSIONS=y). Not needed after flashing AnyKernel3 (do.modules=1 replaces vendor kos). Use only if you flashed boot_ksu.img via fastboot.
 EOF
 
 zip_name="wlan_crc_match_${KERNEL_VER_LABEL}-ksu-g${safe_sha}.zip"

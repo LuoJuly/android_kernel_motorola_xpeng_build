@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
-# Pack compiled kernel Image (+ optional WiFi KSU Magisk module) into AnyKernel3 zip.
+# Pack compiled kernel Image + vendor WiFi .ko into AnyKernel3 zip.
+#
+# AnyKernel3 (do.modules=1, do.systemless=0) pushes
+# modules/vendor/lib/modules/*.ko onto /vendor/lib/modules/.
+# The zip does NOT bundle a KernelSU/Magisk WiFi module.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +15,6 @@ KERNEL_VER_LABEL="${KERNEL_VER_LABEL:-5.4.302}"
 AK3_REPO="${AK3_REPO:-https://github.com/osm0sis/AnyKernel3.git}"
 AK3_REF="${AK3_REF:-master}"
 AK3_DIR="${AK3_DIR:-${WORK_DIR}/AnyKernel3}"
-WLAN_KSU_ZIP="${WLAN_KSU_ZIP:-}"
 WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}"
 
 info() { echo "[+] $*"; }
@@ -39,22 +42,18 @@ resolve_image() {
   die "kernel Image not found (set KERNEL_IMAGE or build first)"
 }
 
-resolve_wlan_zip() {
-  if [[ -n "${WLAN_KSU_ZIP}" && -f "${WLAN_KSU_ZIP}" ]]; then
-    echo "${WLAN_KSU_ZIP}"
+resolve_wlan_kos() {
+  local dir="${WLAN_OUT_DIR}"
+  if [[ -d "${dir}" && -f "${dir}/qca_cld3_wlan.ko" ]]; then
+    echo "${dir}"
     return
   fi
-  if [[ -f "${WORK_DIR}/wlan_ksu_zip.txt" ]]; then
-    local p
-    p="$(cat "${WORK_DIR}/wlan_ksu_zip.txt")"
-    if [[ -f "${p}" ]]; then
-      echo "${p}"
+  if [[ -f "${WORK_DIR}/wlan_out_dir.txt" ]]; then
+    dir="$(cat "${WORK_DIR}/wlan_out_dir.txt")"
+    if [[ -d "${dir}" && -f "${dir}/qca_cld3_wlan.ko" ]]; then
+      echo "${dir}"
       return
     fi
-  fi
-  if [[ -f "${WORK_DIR}/release/wlan_crc_match_ksu.zip" ]]; then
-    echo "${WORK_DIR}/release/wlan_crc_match_ksu.zip"
-    return
   fi
   echo ""
 }
@@ -94,8 +93,8 @@ write_anykernel_sh() {
 properties() { '
 kernel.string=${device_title} ${kver} ${resukisu_ver} (${rom_id})
 do.devicecheck=1
-do.modules=0
-do.systemless=1
+do.modules=1
+do.systemless=0
 do.cleanup=1
 do.cleanuponabort=0
 device.name1=${DEVICE}
@@ -137,41 +136,9 @@ EOF
 
   if [[ "${has_wlan}" == "1" ]]; then
     cat >> "${AK3_DIR}/anykernel.sh" <<'EOF'
-## bundled WiFi KSU Magisk module (CRC/vermagic-matched qca_cld3_*.ko)
 ui_print " ";
-ui_print "Installing bundled WiFi KSU module...";
-WLAN_ZIP="$AKHOME/wlan_crc_match_ksu.zip";
-if [ -f "$WLAN_ZIP" ]; then
-  # Persist a copy for KernelSU Manager / manual install
-  mkdir -p /sdcard/Download;
-  cp -f "$WLAN_ZIP" /sdcard/Download/wlan_crc_match_ksu.zip;
-  ui_print "- saved /sdcard/Download/wlan_crc_match_ksu.zip";
-
-  # Best-effort install into Magisk/KernelSU modules dir (when writable)
-  MODROOT="";
-  for d in /data/adb/modules /data/adb/ksu/modules; do
-    if [ -d "$(dirname "$d")" ] && mkdir -p "$d" 2>/dev/null; then
-      MODROOT="$d/wlan_crc_match_302";
-      break;
-    fi
-  done
-  if [ -n "$MODROOT" ]; then
-    rm -rf "$MODROOT";
-    mkdir -p "$MODROOT";
-    unzip -o "$WLAN_ZIP" -d "$MODROOT" >/dev/null 2>&1 || true;
-    # Magisk update-binary / META-INF not needed inside modules tree
-    rm -rf "$MODROOT/META-INF" 2>/dev/null || true;
-    chmod 0755 "$MODROOT/service.sh" "$MODROOT/customize.sh" 2>/dev/null || true;
-    touch "$MODROOT/auto_mount" 2>/dev/null || true;
-    ui_print "- installed module -> $MODROOT";
-    ui_print "- reboot required for Wi-Fi overlay + service.sh";
-  else
-    ui_print "- /data not writable here; install wlan_crc_match_ksu.zip via KernelSU after boot";
-  fi
-else
-  ui_print "- WARNING: wlan_crc_match_ksu.zip missing from zip";
-fi
-## end WiFi module install
+ui_print "WiFi qca_cld3_*.ko will be pushed to /vendor/lib/modules/";
+ui_print "(do.modules=1, no KernelSU WiFi module required)";
 EOF
   fi
 
@@ -180,9 +147,26 @@ EOF
 EOF
 }
 
+stage_wlan_kos() {
+  local wlan_dir="$1"
+  local dest="${AK3_DIR}/modules/vendor/lib/modules"
+  local ko missing=0
+  mkdir -p "${dest}"
+  for ko in qca_cld3_wlan.ko qca_cld3_qca6750.ko qca_cld3_qca6390.ko; do
+    if [[ -f "${wlan_dir}/${ko}" ]]; then
+      cp -f "${wlan_dir}/${ko}" "${dest}/"
+      info "Staged ${ko} -> modules/vendor/lib/modules/"
+    else
+      info "WARNING: missing ${wlan_dir}/${ko}"
+      missing=1
+    fi
+  done
+  [[ "${missing}" == "0" ]] || die "incomplete WiFi kos in ${wlan_dir}"
+}
+
 pack_zip() {
   local image="$1"
-  local wlan_zip="${2:-}"
+  local wlan_dir="${2:-}"
   mkdir -p "${WORK_DIR}/release"
 
   rm -rf "${AK3_DIR}/.git" \
@@ -193,14 +177,8 @@ pack_zip() {
 
   cp -f "${image}" "${AK3_DIR}/Image"
 
-  if [[ -n "${wlan_zip}" && -f "${wlan_zip}" ]]; then
-    cp -f "${wlan_zip}" "${AK3_DIR}/wlan_crc_match_ksu.zip"
-    # Also stage kos under modules/ for visibility / optional tools
-    if [[ -d "${WLAN_OUT_DIR}" ]]; then
-      mkdir -p "${AK3_DIR}/modules/system/vendor/lib/modules"
-      cp -f "${WLAN_OUT_DIR}/qca_cld3_"*.ko \
-        "${AK3_DIR}/modules/system/vendor/lib/modules/" 2>/dev/null || true
-    fi
+  if [[ -n "${wlan_dir}" && -d "${wlan_dir}" ]]; then
+    stage_wlan_kos "${wlan_dir}"
   fi
 
   RESUKISU_VERSION="${RESUKISU_VERSION:-$(cat "${WORK_DIR}/resukisu_version.txt" 2>/dev/null || echo unknown)}"
@@ -235,15 +213,15 @@ main() {
   command -v zip >/dev/null || die "zip is required (apt install zip)"
   command -v git >/dev/null || die "git is required"
 
-  local image wlan_zip has_wlan=0
+  local image wlan_dir has_wlan=0
   image="$(resolve_image)"
   info "Using kernel Image: ${image}"
-  wlan_zip="$(resolve_wlan_zip)"
-  if [[ -n "${wlan_zip}" ]]; then
+  wlan_dir="$(resolve_wlan_kos)"
+  if [[ -n "${wlan_dir}" ]]; then
     has_wlan=1
-    info "Bundling WiFi KSU zip: ${wlan_zip}"
+    info "Packing WiFi kos from: ${wlan_dir}"
   else
-    info "No WiFi KSU zip found; packing kernel-only AnyKernel3"
+    info "No WiFi kos found; packing kernel-only AnyKernel3"
   fi
 
   if [[ -z "${RESUKISU_VERSION:-}" && -f "${WORK_DIR}/resukisu_version.txt" ]]; then
@@ -259,7 +237,7 @@ main() {
 
   clone_anykernel3
   write_anykernel_sh "${has_wlan}"
-  pack_zip "${image}" "${wlan_zip}"
+  pack_zip "${image}" "${wlan_dir}"
   info "AnyKernel3 pack done."
 }
 

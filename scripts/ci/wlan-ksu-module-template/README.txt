@@ -10,11 +10,11 @@ Why service.sh:
   overlay is applied. Overlay alone is not enough; service.sh waits for the
   matched .ko then insmod + enables Wi-Fi.
 
-Install order:
-  1) Flash boot_ksu.img / AnyKernel3 (MODVERSIONS=y, kernel 5.4.302)
-  2) If using standalone zip: install via KernelSU Manager
+Install order (fastboot boot.img only — AnyKernel3 does not need this zip):
+  1) Flash boot_ksu.img (MODVERSIONS=y, kernel 5.4.302)
+  2) Install this zip via KernelSU Manager
   3) Reboot
   4) If Wi-Fi still off, toggle Wi-Fi once in Settings
 
-When flashed via AnyKernel3, the Magisk/KSU module zip is also extracted to
-/sdcard/Download/ and (when possible) installed under /data/adb/modules/.
+AnyKernel3 already pushes qca_cld3_*.ko to /vendor/lib/modules/ (do.modules=1).
+Do not install this KSU module after flashing AnyKernel3.
