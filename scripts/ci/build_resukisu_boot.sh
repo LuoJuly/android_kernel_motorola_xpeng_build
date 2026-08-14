@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build xpeng MMI kernel (ReSukiSU), repack boot_oem.img, pack AnyKernel3
-# (do.modules=1 pushes vendor WiFi kos when present; no KSU wifi zip inside AK3).
+# Build xpeng MMI kernel (ReSukiSU), live-build WiFi kos, repack boot, pack AnyKernel3
+# (do.modules=1 pushes vendor WiFi kos; no KSU wifi zip inside AK3).
 #
 # This script lives in kernel_motorola_xpeng_build and clones kernel sources
 # from github.com/LuoJuly/android_kernel_motorola_xpeng (not vendored here).
@@ -16,6 +16,7 @@ cd "${BUILD_ROOT}"
 VARIANT="${VARIANT:-edge-s30}"
 ENABLE_NFC="${ENABLE_NFC:-false}"
 ROM_ID="${ROM_ID:-S3RXC32.33-8-29}"
+KERNEL_VER_LABEL="${KERNEL_VER_LABEL:-5.4.210}"
 DEVICE="${DEVICE:-xpeng}"
 TARGET_PRODUCT="${TARGET_PRODUCT:-xpeng_retcn}"
 TARGET_BUILD_VARIANT="${TARGET_BUILD_VARIANT:-user}"
@@ -36,6 +37,8 @@ BOOT_OEM_RELEASE_REPO="${BOOT_OEM_RELEASE_REPO:-LuoJuly/kernel_motorola_xpeng_bu
 # Tag prefix z- keeps this utility release at the bottom of the Releases list.
 BOOT_OEM_RELEASE_TAG="${BOOT_OEM_RELEASE_TAG:-z-assets-S3RXC32.33-8-29}"
 BOOT_OEM_ASSET_NAME="${BOOT_OEM_ASSET_NAME:-boot_oem.img}"
+BUILD_WLAN="${BUILD_WLAN:-true}"
+WLAN_TAG="${WLAN_TAG:-MMI-S3RXC32.33-8-29}"
 
 KERNEL_URL="${KERNEL_URL:-https://github.com/LuoJuly/android_kernel_motorola_xpeng.git}"
 KERNEL_BRANCH="${KERNEL_BRANCH:-android-12-release-S3RXC32.33-8-29}"
@@ -46,14 +49,14 @@ case "${VARIANT}" in
     VARIANT=edge-s30
     VARIANT_SLUG="xpeng-EdgeS30"
     DEVICE_TITLE="Moto Edge S30 (XT2175-2)"
-    RELEASE_TITLE="xpeng ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)"
+    RELEASE_TITLE="xpeng ${KERNEL_VER_LABEL} ReSukiSU Boot/Kernel for Moto Edge S30 (XT2175-2)"
     ENABLE_NFC=false
     ;;
   g200|xt2175-1)
     VARIANT=g200
     VARIANT_SLUG="xpeng-G200"
     DEVICE_TITLE="Moto G200 5G (XT2175-1)"
-    RELEASE_TITLE="xpeng ReSukiSU Boot/Kernel for Moto G200 5G (XT2175-1)"
+    RELEASE_TITLE="xpeng ${KERNEL_VER_LABEL} ReSukiSU Boot/Kernel for Moto G200 5G (XT2175-1)"
     ENABLE_NFC=true
     ;;
   *)
@@ -558,10 +561,50 @@ repack_boot() {
   gh_env VARIANT_SLUG "${VARIANT_SLUG}"
   gh_env DEVICE_TITLE "${DEVICE_TITLE}"
   gh_env ROM_ID "${ROM_ID}"
+  gh_env KERNEL_VER_LABEL "${KERNEL_VER_LABEL}"
   gh_env WORK_DIR "${WORK_DIR}"
 
   info "Output: ${BOOT_ARTIFACT}"
   info "Release tag: ${RELEASE_TAG}"
+  endlog
+}
+
+build_wlan_and_pack() {
+  [[ "${BUILD_WLAN}" == "true" ]] || {
+    info "BUILD_WLAN=false; skipping live WiFi kos"
+    return 0
+  }
+  log "Build WiFi modules (CRC/vermagic-matched) + optional KSU zip"
+  local wlan_script pack_script
+  wlan_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/build_wlan_modules.sh"
+  pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_wlan_ksu_module.sh"
+  [[ -f "${wlan_script}" ]] || die "missing ${wlan_script}"
+  [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
+
+  BUILD_ROOT="${BUILD_ROOT}" WORK_DIR="${WORK_DIR}" OUT_DIR="${OUT_DIR}" \
+    WLAN_TAG="${WLAN_TAG}" JOBS="${JOBS}" \
+    CLANG="${CLANG}" MAKE="${MAKE}" AARCH64_PREFIX="${AARCH64_PREFIX}" \
+    LD_LLD="${LD_LLD}" LLVM_AR="${LLVM_AR}" LLVM_NM="${LLVM_NM}" \
+    DTC_EXT="${DTC_EXT}" UFDT_EXT="${UFDT_EXT}" \
+    bash "${wlan_script}"
+
+  WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}"
+  if [[ -f "${WORK_DIR}/wlan_out_dir.txt" ]]; then
+    WLAN_OUT_DIR="$(cat "${WORK_DIR}/wlan_out_dir.txt")"
+  fi
+
+  BUILD_ROOT="${BUILD_ROOT}" WORK_DIR="${WORK_DIR}" \
+    WLAN_OUT_DIR="${WLAN_OUT_DIR}" \
+    KERNEL_VER_LABEL="${KERNEL_VER_LABEL}" \
+    KERNEL_DIR="${KERNEL_DIR}" KERNEL_SRC="${KERNEL_DIR}" \
+    bash "${pack_script}"
+
+  export WLAN_OUT_DIR
+  if [[ -f "${WORK_DIR}/wlan_ksu_zip.txt" ]]; then
+    WLAN_KSU_ZIP="$(cat "${WORK_DIR}/wlan_ksu_zip.txt")"
+    export WLAN_KSU_ZIP
+    gh_env WLAN_KSU_ZIP "${WLAN_KSU_ZIP}"
+  fi
   endlog
 }
 
@@ -610,23 +653,26 @@ fastboot -w
 ### AnyKernel3 (any ROM)
 
 Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel flasher app.
-If the zip contains WiFi kos, they are pushed to \`/vendor/lib/modules/\` (\`do.modules=1\`). No KernelSU WiFi module install is needed.
+This replaces the kernel **and** vendor WiFi \`qca_cld3_*.ko\` (\`do.modules=1\`). No KernelSU WiFi module install is needed.
 
 ## Notes
 - Device: ${DEVICE_TITLE}
+- Kernel: **${KERNEL_VER_LABEL}**
 - MYUI: 4.0
 - Android 12
 - ROM: ${ROM_ID}
 - ReSukiSU: ${RESUKISU_DISPLAY}
 - NFC: ${nfc_note}
-- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` (\`do.modules=1\`)
+- WiFi: CRC/vermagic-matched \`qca_cld3_*.ko\` (built with this Image)
+- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` (\`do.modules=1\`, pushes kos to \`/vendor/lib/modules/\`)
 
 ## Assets
 - \`boot_ksu.img\` — OEM boot.img with replaced ReSukiSU kernel
 - \`Image\` — raw ARM64 kernel Image
-- \`AnyKernel3-*.zip\` — flashable zip (kernel + vendor WiFi kos when present; no KernelSU WiFi module)
+- \`AnyKernel3-*.zip\` — flashable zip (kernel + vendor WiFi kos; no KernelSU WiFi module needed)
+- \`wlan_crc_match_*-ksu-*.zip\` — optional KernelSU/Magisk overlay **only if** you flash \`boot_ksu.img\` via fastboot (does not replace vendor kos)
 
-> Built automatically from \`kernel_motorola_xpeng_build\` (\`S3RXC32.33-8-29-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng](https://github.com/LuoJuly/android_kernel_motorola_xpeng) with the latest ReSukiSU submodule and latest AnyKernel3 upstream.
+> Built automatically from \`android_kernel_motorola_xpeng_build\` (\`S3RXC32.33-8-29-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng @ android-12-release-S3RXC32.33-8-29](https://github.com/LuoJuly/android_kernel_motorola_xpeng/tree/android-12-release-S3RXC32.33-8-29) with ReSukiSU + live-built WiFi kos + latest AnyKernel3 upstream.
 EOF
   gh_env RELEASE_NOTES "${WORK_DIR}/release/RELEASE_NOTES.md"
   info "Release notes written"
@@ -634,7 +680,8 @@ EOF
 
 main() {
   info "Variant=${VARIANT} Device=${DEVICE_TITLE} NFC=${ENABLE_NFC}"
-  info "BUILD_ROOT=${BUILD_ROOT}"
+  info "Kernel branch=${KERNEL_BRANCH} label=${KERNEL_VER_LABEL} ROM_ID=${ROM_ID}"
+  info "BUILD_ROOT=${BUILD_ROOT} BUILD_WLAN=${BUILD_WLAN}"
   fetch_kernel
   update_resukisu
   setup_toolchain
@@ -649,6 +696,8 @@ main() {
     fi
     info "Skipping kernel build; using existing Image"
   fi
+  # WiFi kos must track this Image's Module.symvers / vermagic
+  build_wlan_and_pack
   ensure_boot_oem
   setup_magiskboot
   repack_boot

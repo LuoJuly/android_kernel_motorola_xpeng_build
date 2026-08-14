@@ -40,7 +40,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             bison flex bc libssl-dev libelf-dev cpio \
-            python3 curl ca-certificates git rsync xz-utils zip
+            python3 curl ca-certificates git rsync xz-utils zip kmod
 
       - name: Checkout build scripts
         uses: actions/checkout@v4
@@ -56,11 +56,14 @@ jobs:
           restore-keys: |
             toolchain-clang-r383902b1-lineage-gcc49-
 
-      - name: Build kernel, boot.img and AnyKernel3 (do.modules=1)
+      - name: Build kernel, WiFi kos, boot.img and AnyKernel3 (do.modules=1)
         id: build
         env:
           VARIANT: g200
           ENABLE_NFC: "true"
+          BUILD_WLAN: "true"
+          KERNEL_VER_LABEL: "5.4.210"
+          ROM_ID: S3RXC32.33-8-29
           UPDATE_RESUKISU: ${{ inputs.update_resukisu }}
           KERNEL_URL: https://github.com/LuoJuly/android_kernel_motorola_xpeng.git
           KERNEL_BRANCH: android-12-release-S3RXC32.33-8-29
@@ -70,7 +73,10 @@ jobs:
           GCC_GIT_FALLBACK: https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
           GCC_GIT_FALLBACK_BRANCH: master-kernel-build-2021
         run: |
-          chmod +x scripts/ci/build_resukisu_boot.sh scripts/ci/pack_anykernel3.sh
+          chmod +x scripts/ci/build_resukisu_boot.sh \
+            scripts/ci/pack_anykernel3.sh \
+            scripts/ci/build_wlan_modules.sh \
+            scripts/ci/pack_wlan_ksu_module.sh
           chmod +x scripts/ci/host-bin/* || true
           scripts/ci/build_resukisu_boot.sh
 
@@ -83,6 +89,7 @@ jobs:
             .ci-work/g200/release/boot.img
             .ci-work/g200/release/Image
             .ci-work/g200/release/AnyKernel3*.zip
+            .ci-work/g200/release/wlan_crc_match*.zip
             .ci-work/g200/release/RELEASE_NOTES.md
           if-no-files-found: error
           retention-days: 14
@@ -97,6 +104,7 @@ jobs:
             .ci-work/g200/release/boot_ksu.img
             .ci-work/g200/release/Image
             .ci-work/g200/release/AnyKernel3-*.zip
+            .ci-work/g200/release/wlan_crc_match*-ksu-*.zip
           draft: false
           prerelease: false
           make_latest: true

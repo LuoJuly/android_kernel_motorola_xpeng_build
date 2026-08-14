@@ -9,8 +9,9 @@ Build scripts for Motorola **xpeng** (Moto G200 5G / Edge S30) kernel + WLAN, ba
 | Kernel version | **5.4.210** |
 | Kernel source branch | `android-12-release-S3RXC32.33-8-29` |
 | CI schedule | **manual only** (`workflow_dispatch`) — weekly cron disabled |
+| WiFi | **live-built** `qca_cld3_*.ko` packed into AnyKernel3 (`do.modules=1`) |
 
-For the **5.4.302** live-WiFi pipeline, use branch [`5.4.302-s3rxc32.33-8-25-ReSukiSU`](https://github.com/LuoJuly/android_kernel_motorola_xpeng_build/tree/5.4.302-s3rxc32.33-8-25-ReSukiSU).
+For the **5.4.302** pipeline, use branch [`5.4.302-s3rxc32.33-8-25-ReSukiSU`](https://github.com/LuoJuly/android_kernel_motorola_xpeng_build/tree/5.4.302-s3rxc32.33-8-25-ReSukiSU).
 
 Kernel sources are **not** in this repo. They are fetched by git:
 
@@ -28,8 +29,10 @@ git clone --recursive https://github.com/LuoJuly/android_kernel_motorola_xpeng
 | `build-all.sh` | Kernel + WLAN + install stripped kos |
 | `setup.sh` | Fetch/link kernel, clang, gcc, Lineage host tools, WLAN trees |
 | `prebuilt/boot_oem.img` | Stock boot (gitignored; downloaded from Release `z-assets-S3RXC32.33-8-29`) |
-| `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → build → repack boot → AnyKernel3 |
-| `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip (`do.modules=1`, vendor kos if present; no KSU wifi zip) |
+| `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → Image → **WiFi kos** → boot → AnyKernel3 |
+| `scripts/ci/build_wlan_modules.sh` | Build vermagic-matched `qca_cld3_*.ko` against current `O=` |
+| `scripts/ci/pack_wlan_ksu_module.sh` | Optional Magisk/KernelSU WiFi zip (fastboot-only fallback) |
+| `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip (**Image + vendor WiFi kos**, `do.modules=1`) |
 | `scripts/ci/run_local_both.sh` | Local helper: Edge S30 (NFC off) + G200 (NFC on) |
 | `.github/workflows/` | Manual Actions for both devices |
 
@@ -45,9 +48,10 @@ Each run:
 1. Clones `android_kernel_motorola_xpeng` (`--recursive`)
 2. Updates ReSukiSU submodule to latest `main` (optional input)
 3. Builds kernel (NFC per variant)
-4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
-5. Packs AnyKernel3 from latest upstream (`do.modules=1`, `do.systemless=0`; vendor WiFi kos when `WLAN_OUT_DIR` or `out/wlan-modules` exists)
-6. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`
+4. Live-builds WiFi `qca_cld3_*.ko` against that Image (`WLAN_TAG=MMI-S3RXC32.33-8-29`)
+5. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
+6. Packs AnyKernel3 (`do.modules=1`, `do.systemless=0`; vendor WiFi kos inside the zip)
+7. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`, optional `wlan_crc_match_*-ksu-*.zip`
 
 OEM boot base image is stored as Release asset tag `z-assets-S3RXC32.33-8-29` (not in git) to keep pushes small and stay at the bottom of the Releases list.
 
@@ -69,6 +73,10 @@ VARIANT=g200 ./scripts/ci/build_resukisu_boot.sh
 ```
 
 Artifacts: `.ci-work/<variant>/release/`
+
+- `boot_ksu.img` / `Image`
+- `wlan_crc_match_5.4.210-ksu-g*.zip` (optional fastboot fallback)
+- `AnyKernel3-*-ReSukiSU-*.zip` (kernel + `modules/vendor/lib/modules/qca_cld3_*.ko`)
 
 ## One-time setup (manual MMI build)
 
@@ -105,6 +113,8 @@ fastboot flash boot boot_ksu.img
 fastboot -w
 ```
 
-AnyKernel3: flash in recovery / Kernel Flasher. With `do.modules=1` it also pushes WiFi `.ko` to `/vendor/lib/modules/` when they are packed. No KernelSU WiFi module is bundled or required.
+AnyKernel3: flash in recovery / Kernel Flasher. It installs the kernel and pushes WiFi `.ko` to `/vendor/lib/modules/` (`do.modules=1`). **Do not** install the KernelSU WiFi module after flashing AnyKernel3.
+
+Standalone WiFi zip: only needed if you flashed `boot_ksu.img` via fastboot (that path does not replace vendor kos).
 
 Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU` (kernel **5.4.210**, manual Actions only)
