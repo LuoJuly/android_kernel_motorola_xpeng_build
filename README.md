@@ -29,7 +29,7 @@ git clone --recursive https://github.com/LuoJuly/android_kernel_motorola_xpeng
 | `setup.sh` | Fetch/link kernel, clang, gcc, Lineage host tools, WLAN trees |
 | `prebuilt/boot_oem.img` | Stock boot (gitignored; downloaded from Release `z-assets-S3RXC32.33-8-29`) |
 | `scripts/ci/build_resukisu_boot.sh` | Clone kernel → update ReSukiSU → build → repack boot → AnyKernel3 |
-| `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip |
+| `scripts/ci/pack_anykernel3.sh` | Pack latest [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) zip (`do.modules=1`, vendor kos if present; no KSU wifi zip) |
 | `scripts/ci/run_local_both.sh` | Local helper: Edge S30 (NFC off) + G200 (NFC on) |
 | `.github/workflows/` | Manual Actions for both devices |
 
@@ -46,7 +46,7 @@ Each run:
 2. Updates ReSukiSU submodule to latest `main` (optional input)
 3. Builds kernel (NFC per variant)
 4. Fetches `boot_oem.img` (local / `~/download` / Release asset), unpacks with magiskboot, replaces `kernel`, repacks
-5. Packs AnyKernel3 from latest upstream
+5. Packs AnyKernel3 from latest upstream (`do.modules=1`, `do.systemless=0`; vendor WiFi kos when `WLAN_OUT_DIR` or `out/wlan-modules` exists)
 6. Publishes Release assets: `boot_ksu.img`, `Image`, `AnyKernel3-*.zip`
 
 OEM boot base image is stored as Release asset tag `z-assets-S3RXC32.33-8-29` (not in git) to keep pushes small and stay at the bottom of the Releases list.
@@ -104,5 +104,7 @@ fastboot flash boot boot_ksu.img
 # 如果刷写后无法开机，则需要格式化 Data
 fastboot -w
 ```
+
+AnyKernel3: flash in recovery / Kernel Flasher. With `do.modules=1` it also pushes WiFi `.ko` to `/vendor/lib/modules/` when they are packed. No KernelSU WiFi module is bundled or required.
 
 Branch for CI scripts: `S3RXC32.33-8-29-ReSukiSU` (kernel **5.4.210**, manual Actions only)

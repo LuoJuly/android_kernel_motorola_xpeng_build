@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build xpeng MMI kernel (ReSukiSU), repack boot_oem.img, pack AnyKernel3.
+# Build xpeng MMI kernel (ReSukiSU), repack boot_oem.img, pack AnyKernel3
+# (do.modules=1 pushes vendor WiFi kos when present; no KSU wifi zip inside AK3).
 #
 # This script lives in kernel_motorola_xpeng_build and clones kernel sources
 # from github.com/LuoJuly/android_kernel_motorola_xpeng (not vendored here).
@@ -565,7 +566,7 @@ repack_boot() {
 }
 
 pack_anykernel3() {
-  log "Pack AnyKernel3 zip"
+  log "Pack AnyKernel3 zip (kernel + vendor WiFi kos if present)"
   local pack_script
   pack_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/pack_anykernel3.sh"
   [[ -f "${pack_script}" ]] || die "missing ${pack_script}"
@@ -575,6 +576,7 @@ pack_anykernel3() {
     RESUKISU_VERSION="${RESUKISU_VERSION:-}" \
     RESUKISU_DISPLAY="${RESUKISU_DISPLAY:-}" \
     ROM_ID="${ROM_ID}" \
+    WLAN_OUT_DIR="${WLAN_OUT_DIR:-${WORK_DIR}/wlan-kos}" \
     GITHUB_PROXY="${GITHUB_PROXY:-}" \
     KERNEL_IMAGE="${WORK_DIR}/release/Image" \
     bash "${pack_script}"
@@ -608,6 +610,7 @@ fastboot -w
 ### AnyKernel3 (any ROM)
 
 Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel flasher app.
+If the zip contains WiFi kos, they are pushed to \`/vendor/lib/modules/\` (\`do.modules=1\`). No KernelSU WiFi module install is needed.
 
 ## Notes
 - Device: ${DEVICE_TITLE}
@@ -616,12 +619,12 @@ Sideload or flash \`AnyKernel3-*.zip\` in a custom recovery, or use a kernel fla
 - ROM: ${ROM_ID}
 - ReSukiSU: ${RESUKISU_DISPLAY}
 - NFC: ${nfc_note}
-- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\`
+- AnyKernel3: [osm0sis/AnyKernel3](https://github.com/osm0sis/AnyKernel3) \`${AK3_COMMIT}\` (\`do.modules=1\`)
 
 ## Assets
 - \`boot_ksu.img\` — OEM boot.img with replaced ReSukiSU kernel
 - \`Image\` — raw ARM64 kernel Image
-- \`AnyKernel3-*.zip\` — flashable zip for recovery / Kernel Flasher
+- \`AnyKernel3-*.zip\` — flashable zip (kernel + vendor WiFi kos when present; no KernelSU WiFi module)
 
 > Built automatically from \`kernel_motorola_xpeng_build\` (\`S3RXC32.33-8-29-ReSukiSU\`) using kernel sources from [android_kernel_motorola_xpeng](https://github.com/LuoJuly/android_kernel_motorola_xpeng) with the latest ReSukiSU submodule and latest AnyKernel3 upstream.
 EOF
